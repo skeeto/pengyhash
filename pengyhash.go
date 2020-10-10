@@ -24,8 +24,8 @@ type hash256 struct {
 	n     int
 }
 
-// New returns a new, seeded hash.Hash computing an incremental of pengyhash
-// with a 256-bit digest.
+// New returns a new, seeded hash.Hash computing an incremental variant of
+// pengyhash with a 256-bit digest.
 func New(seed uint64) hash.Hash {
 	var h hash256
 	h.seed = seed
@@ -126,7 +126,7 @@ func (h *hash256) Sum(p []byte) []byte {
 	return append(p, r[:]...)
 }
 
-// Pengyhash computes the original, non-incremental hash function.
+// Pengyhash computes the original, non-incremental hash.
 func Pengyhash(buf []byte, seed uint32) uint64 {
 	b := [4]uint64{}
 	s := [4]uint64{0, 0, 0, uint64(len(buf))}

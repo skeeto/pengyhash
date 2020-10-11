@@ -16,11 +16,10 @@ const Size = 32
 const BlockSize = 32
 
 type hash256 struct {
-	b     [4]uint64
+	block [32]byte
 	s     [4]uint64
 	seed  uint64
 	total uint64
-	tmp   [32]byte
 	n     int
 }
 
@@ -42,30 +41,24 @@ func (h *hash256) BlockSize() int {
 }
 
 func (h *hash256) Reset() {
-	h.b[0] = 0
-	h.b[1] = 0
-	h.b[2] = 0
-	h.b[3] = 0
-	h.s[0] = 0
-	h.s[1] = 0
-	h.s[2] = 0
+	*h = hash256{}
 	h.s[3] = h.seed
-	h.n = 0
-	h.total = 0
 }
 
 func (h *hash256) write32(buf []byte) {
-	h.b[0] = binary.LittleEndian.Uint64(buf[0:])
-	h.b[1] = binary.LittleEndian.Uint64(buf[8:])
-	h.b[2] = binary.LittleEndian.Uint64(buf[16:])
-	h.b[3] = binary.LittleEndian.Uint64(buf[24:])
-	h.s[0] += h.s[1] + h.b[3]
+	b := [4]uint64{
+		binary.LittleEndian.Uint64(buf[0:]),
+		binary.LittleEndian.Uint64(buf[8:]),
+		binary.LittleEndian.Uint64(buf[16:]),
+		binary.LittleEndian.Uint64(buf[24:]),
+	}
+	h.s[0] += h.s[1] + b[3]
 	h.s[1] = h.s[0] + bits.RotateLeft64(h.s[1], 14)
-	h.s[2] += h.s[3] + h.b[2]
+	h.s[2] += h.s[3] + b[2]
 	h.s[3] = h.s[2] + bits.RotateLeft64(h.s[3], 23)
-	h.s[0] += h.s[3] + h.b[1]
+	h.s[0] += h.s[3] + b[1]
 	h.s[3] = h.s[0] ^ bits.RotateLeft64(h.s[3], 16)
-	h.s[2] += h.s[1] + h.b[0]
+	h.s[2] += h.s[1] + b[0]
 	h.s[1] = h.s[2] ^ bits.RotateLeft64(h.s[1], 40)
 }
 
@@ -74,35 +67,32 @@ func (h *hash256) Write(buf []byte) (int, error) {
 	h.total += uint64(total)
 
 	if h.n != 0 {
-		n := copy(h.tmp[h.n:], buf)
+		n := copy(h.block[h.n:], buf)
 		h.n += n
 		buf = buf[n:]
 		if h.n == 32 {
-			h.write32(h.tmp[:])
+			h.write32(h.block[:])
 			h.n = 0
 		}
 	}
 
 	for ; len(buf) >= 32; buf = buf[32:] {
 		h.write32(buf)
+		if len(buf) < 64 {
+			copy(h.block[:], buf[:])
+		}
 	}
-	h.n = copy(h.tmp[:], buf[:])
+	h.n = copy(h.block[:], buf[:])
 
 	return total, nil
 }
 
 func (h *hash256) Sum(p []byte) []byte {
-	var tmp [32]byte
-	binary.LittleEndian.PutUint64(tmp[0:], h.b[0])
-	binary.LittleEndian.PutUint64(tmp[8:], h.b[1])
-	binary.LittleEndian.PutUint64(tmp[16:], h.b[2])
-	binary.LittleEndian.PutUint64(tmp[24:], h.b[3])
-	copy(tmp[:], h.tmp[:h.n])
 	b := [4]uint64{
-		binary.LittleEndian.Uint64(tmp[0:]),
-		binary.LittleEndian.Uint64(tmp[8:]),
-		binary.LittleEndian.Uint64(tmp[16:]),
-		binary.LittleEndian.Uint64(tmp[24:]),
+		binary.LittleEndian.Uint64(h.block[0:]),
+		binary.LittleEndian.Uint64(h.block[8:]),
+		binary.LittleEndian.Uint64(h.block[16:]),
+		binary.LittleEndian.Uint64(h.block[24:]),
 	}
 
 	var s [4]uint64

@@ -5,6 +5,7 @@ package pengyhash
 
 import (
 	"encoding/binary"
+	"errors"
 	"hash"
 	"math/bits"
 )
@@ -24,7 +25,9 @@ type hash256 struct {
 }
 
 // New returns a new, seeded hash.Hash computing an incremental variant of
-// pengyhash with a 256-bit digest.
+// pengyhash with a 256-bit digest. Also implements encoding.BinaryMarshaler
+// and encoding.BinaryUnmarshaler to marshal and unmarshal the internal state
+// of the hash.
 func New(seed uint64) hash.Hash {
 	var h hash256
 	h.seed = seed
@@ -114,6 +117,39 @@ func (h *hash256) Sum(p []byte) []byte {
 	binary.LittleEndian.PutUint64(r[16:], s[2])
 	binary.LittleEndian.PutUint64(r[24:], s[3])
 	return append(p, r[:]...)
+}
+
+func (h *hash256) MarshalBinary() ([]byte, error) {
+	var buf [32 + 32 + 8 + 8 + 1]byte
+	copy(buf[0:], h.block[:])
+	binary.LittleEndian.PutUint64(buf[32:], h.s[0])
+	binary.LittleEndian.PutUint64(buf[40:], h.s[1])
+	binary.LittleEndian.PutUint64(buf[48:], h.s[2])
+	binary.LittleEndian.PutUint64(buf[56:], h.s[3])
+	binary.LittleEndian.PutUint64(buf[64:], h.seed)
+	binary.LittleEndian.PutUint64(buf[72:], h.total)
+	buf[80] = byte(h.n)
+	return buf[:], nil
+}
+
+func (h *hash256) UnmarshalBinary(data []byte) error {
+	if len(data) < 32+32+8+8+1 {
+		return errors.New("invalid length")
+	}
+	if data[80] >= 32 {
+		return errors.New("invalid data")
+	}
+
+	copy(h.block[:], data[0:])
+	h.s[0] = binary.LittleEndian.Uint64(data[32:])
+	h.s[1] = binary.LittleEndian.Uint64(data[40:])
+	h.s[2] = binary.LittleEndian.Uint64(data[48:])
+	h.s[3] = binary.LittleEndian.Uint64(data[56:])
+	h.seed = binary.LittleEndian.Uint64(data[64:])
+	h.total = binary.LittleEndian.Uint64(data[72:])
+	h.n = int(data[80])
+
+	return nil
 }
 
 // Pengyhash computes the original, non-incremental hash.

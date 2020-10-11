@@ -2,10 +2,11 @@ package pengyhash
 
 import (
 	"bytes"
+	"encoding"
 	"testing"
 )
 
-func TestHash(t *testing.T) {
+func TestOutput(t *testing.T) {
 	// from reference implementation
 	const want64 = 0xf4f178b8b8deb902
 	var input [39]byte
@@ -28,5 +29,21 @@ func TestHash(t *testing.T) {
 	got := h.Sum(nil)
 	if !bytes.Equal(want[:], got) {
 		t.Errorf("Sum(), got %#v, want %#v", got, want)
+	}
+}
+
+func TestMarshal(t *testing.T) {
+	var zero [1<<20 + 31]byte
+	h0 := New(1)
+	h0.Write(zero[:])
+	buf, _ := h0.(encoding.BinaryMarshaler).MarshalBinary()
+	want := h0.Sum(nil)
+
+	h1 := New(0)
+	h1.(encoding.BinaryUnmarshaler).UnmarshalBinary(buf)
+	got := h1.Sum(nil)
+
+	if !bytes.Equal(want, got) {
+		t.Errorf("Marshaler got %#v, want %#v", got, want)
 	}
 }
